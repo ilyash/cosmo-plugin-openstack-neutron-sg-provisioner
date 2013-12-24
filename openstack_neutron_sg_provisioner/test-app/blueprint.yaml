@@ -1,0 +1,27 @@
+# vim: ts=4 sw=4 et
+imports:
+    - 'cloudify.types'
+    - 'neutron-sg-type.yaml'
+
+
+blueprint:
+    name: 'neutron-security_group-test'
+    topology:
+        -
+            name: 'neutron_security_group'
+            type: 'neutron_security_group'
+            interfaces:
+                    - 'cloudify.interfaces.security_group_provisioner'
+            properties:
+                security_group:
+                    name: 'neutron_security_group_test'
+
+            policies:
+                -
+                    name: 'start_detection_policy'
+                    rules:
+                        -
+                            type: 'state_equals'
+                            properties:
+                                service: 'security group status'
+                                state: 'running'
