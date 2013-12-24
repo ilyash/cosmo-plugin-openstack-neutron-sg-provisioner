@@ -15,6 +15,20 @@ blueprint:
             properties:
                 security_group:
                     name: 'neutron_security_group_test'
+                    description: 'Neutron security group test'
+                    rules:
+                        -
+                            remote_ip_prefix: 1.2.3.0/24
+                        -
+                            port: 80
+                        -
+                            remote_ip_prefix: 2.3.4.0/24
+                            port_range_min: 65500
+                            port_range_max: 65510
+                        -
+                            remote_group_name: default
+                            port: 65520
+
 
             policies:
                 -

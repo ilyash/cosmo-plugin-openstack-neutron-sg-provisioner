@@ -14,6 +14,11 @@ from neutronclient.neutron import client
 # Cosmo
 from cosmo.events import send_event
 
+DEFAULT_RULE_DIRECTION = 'ingress'
+DEFAULT_RULE_PROTOCOL = 'tcp'
+DEFAULT_RULE_PORT_MIN = 1
+DEFAULT_RULE_PORT_MAX = 65535
+
 @task
 def provision(__cloudify_id, security_group, **kwargs):
     neutron_client = _init_client()
@@ -21,11 +26,30 @@ def provision(__cloudify_id, security_group, **kwargs):
         raise RuntimeError("Can not provision security group with name '{0}' because security group with such name already exists"
                            .format(security_group['name']))
 
-    neutron_client.create_security_group({
+    sg = neutron_client.create_security_group({
         'security_group': {
             'name': security_group['name'],
+            'description': security_group.get('description', None),
         }
-    })
+    })['security_group']
+
+    for rule in security_group['rules']:
+        if ('remote_group_name' in rule) and rule['remote_group_name']:
+            remote_group_id = _get_security_group_by_name(neutron_client, rule['remote_group_name'])['id']
+        else:
+            remote_group_id = None
+        neutron_client.create_security_group_rule({
+            'security_group_rule': {
+                'security_group_id': sg['id'],
+                'direction': rule.get('direction', DEFAULT_RULE_DIRECTION),
+                'protocol': rule.get('protocol', DEFAULT_RULE_PROTOCOL),
+                'port_range_min': rule.get('port', rule.get('port_range_min', DEFAULT_RULE_PORT_MIN)),
+                'port_range_max': rule.get('port', rule.get('port_range_max', DEFAULT_RULE_PORT_MAX)),
+                'remote_ip_prefix': rule.get('remote_ip_prefix'),
+                'remote_group_id': rule.get('remote_group_id', remote_group_id),
+            }
+        })
+
     send_event(__cloudify_id, "sg-" + security_group['name'], "security group status", "state", "running")
 
 @task
