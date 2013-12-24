@@ -15,11 +15,13 @@ plugins:
 interfaces:
     cloudify.interfaces.security_group_provisioner:
         operations:
-            - "provision"
+            - provision
 
 
 types:
     neutron_security_group:
+        interfaces:
+            - cloudify.interfaces.security_group_provisioner
         workflows:
             init:
                 radial: |
