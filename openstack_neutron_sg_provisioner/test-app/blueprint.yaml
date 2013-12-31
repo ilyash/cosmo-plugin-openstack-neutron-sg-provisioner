@@ -16,6 +16,7 @@ blueprint:
                 security_group:
                     name: 'neutron_security_group_test'
                     description: 'Neutron security group test'
+                    # disable_egress: true
                     rules:
                         -
                             remote_ip_prefix: 1.2.3.0/24
@@ -28,6 +29,10 @@ blueprint:
                         -
                             remote_group_name: default
                             port: 65520
+                        -
+                            direction: egress
+                            remote_ip_prefix: 3.4.5.0/24
+                            port: 443
 
 
             policies:

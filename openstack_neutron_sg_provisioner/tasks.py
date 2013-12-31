@@ -19,6 +19,17 @@ DEFAULT_RULE_PROTOCOL = 'tcp'
 DEFAULT_RULE_PORT_MIN = 1
 DEFAULT_RULE_PORT_MAX = 65535
 
+
+def _egress_rules(rules):
+    return [rule for rule in rules if rule.get('direction') == 'egress']
+
+
+def _rules_for_sg_id(neutron_client, id):
+    rules = neutron_client.list_security_group_rules()['security_group_rules']
+    rules = [rule for rule in rules if rule['security_group_id'] == id]
+    return rules
+
+
 @task
 def provision(__cloudify_id, security_group, **kwargs):
     neutron_client = _init_client()
@@ -33,7 +44,16 @@ def provision(__cloudify_id, security_group, **kwargs):
         }
     })['security_group']
 
-    for rule in security_group['rules']:
+    rules_to_apply = security_group['rules']
+    egress_rules_to_apply = _egress_rules(rules_to_apply)
+    if egress_rules_to_apply and security_group.get('disable_egress'):
+        raise RuntimeError("Security group {0} can not have both disable_egress and an egress rule".format(security_group['name']))
+
+    if egress_rules_to_apply or security_group.get('disable_egress'):
+        for er in _egress_rules(_rules_for_sg_id(neutron_client, sg['id'])):
+            neutron_client.delete_security_group_rule(er['id'])
+
+    for rule in rules_to_apply:
         if ('remote_group_name' in rule) and rule['remote_group_name']:
             remote_group_id = _get_security_group_by_name(neutron_client, rule['remote_group_name'])['id']
         else:
@@ -51,6 +71,7 @@ def provision(__cloudify_id, security_group, **kwargs):
         })
 
     send_event(__cloudify_id, "sg-" + security_group['name'], "security group status", "state", "running")
+
 
 @task
 def terminate(security_group, **kwargs):

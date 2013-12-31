@@ -12,6 +12,7 @@ import openstack_neutron_sg_provisioner.tasks as tasks
 
 RANDOM_LEN = 3  # cosmo_test_neutron_XXX_something
 
+
 class OpenstackSecurityGroupProvisionerTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -29,17 +30,77 @@ class OpenstackSecurityGroupProvisionerTestCase(unittest.TestCase):
             if net['name'].startswith(self.name_prefix):
                 self.neutron_client.delete_security_group(net['id'])
 
-    def test_all(self):
-        name = self.name_prefix + 'net1'
-        security_group = {'name': name}
+    def rules_for_sg_id(self, id):
+        rules = self.neutron_client.list_security_group_rules()['security_group_rules']
+        rules = [rule for rule in rules if rule['security_group_id'] == id]
+        return rules
+
+    def test_sg_provision_and_terminate(self):
+        name = self.name_prefix + 'sg1'
+        security_group = {
+            'name': name,
+            'rules': [],
+        }
 
         tasks.provision(name, security_group)
         security_group = tasks._get_security_group_by_name(self.neutron_client, name)
         self.assertIsNotNone(security_group)
 
+        # Must have 2 egress rules by default
+        rules = self.rules_for_sg_id(security_group['id'])
+        egress_rules_count = sum([rule['direction'] == 'egress' for rule in rules])
+        self.assertEquals(egress_rules_count, 2)
+
         tasks.terminate(security_group)
         security_group = tasks._get_security_group_by_name(self.neutron_client, name)
         self.assertIsNone(security_group)
+
+    def test_disabled_egress_sg(self):
+        name = self.name_prefix + 'sg2'
+        security_group = {
+            'name': name,
+            'rules': [],
+            'disable_egress': True,
+        }
+
+        tasks.provision(name, security_group)
+        security_group = tasks._get_security_group_by_name(self.neutron_client, name)
+        self.assertIsNotNone(security_group)
+
+        # Must have no egress rules
+        rules = self.rules_for_sg_id(security_group['id'])
+        egress_rules_count = sum([rule['direction'] == 'egress' for rule in rules])
+        self.assertEquals(egress_rules_count, 0)
+
+    def test_single_egress_rule_sg(self):
+        name = self.name_prefix + 'sg3'
+        security_group = {
+            'name': name,
+            'rules': [{
+                'direction': 'egress'
+            }],
+        }
+
+        tasks.provision(name, security_group)
+        security_group = tasks._get_security_group_by_name(self.neutron_client, name)
+        self.assertIsNotNone(security_group)
+
+        # Must have 1 egress rule
+        rules = self.rules_for_sg_id(security_group['id'])
+        egress_rules_count = sum([rule['direction'] == 'egress' for rule in rules])
+        self.assertEquals(egress_rules_count, 1)
+
+    def test_egress_rule_plus_disabled_egress(self):
+        name = self.name_prefix + 'sg4'
+        security_group = {
+            'name': name,
+            'rules': [{
+                'direction': 'egress'
+            }],
+            'disable_egress': True,
+        }
+        with self.assertRaises(RuntimeError):
+            tasks.provision(name, security_group)
 
 
 if __name__ == '__main__':
